@@ -34,6 +34,10 @@ void execute(
 
 /// \brief One dimensional FFT in forward direction
 ///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
 /// \param out [out] Output data (complex)
@@ -66,6 +70,10 @@ void fft(const ExecutionSpace& exec_space, const InViewType& in,
 
 /// \brief One dimensional FFT in backward direction
 ///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
 /// \param out [out] Output data (complex)
@@ -97,6 +105,10 @@ void ifft(const ExecutionSpace& exec_space, const InViewType& in,
 }
 
 /// \brief One dimensional FFT for real input
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (real)
@@ -131,10 +143,16 @@ void rfft(const ExecutionSpace& exec_space, const InViewType& in,
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::rfft");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axis_type<1>({axis})),
                      "axes are invalid for in/out views");
-  fft(exec_space, in, out, norm, axis, n);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::forward, axis,
+                       n);
+  plan.execute_impl(in, out, norm);
 }
 
 /// \brief Inverse of rfft
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -170,10 +188,16 @@ void irfft(const ExecutionSpace& exec_space, const InViewType& in,
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::irfft");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axis_type<1>({axis})),
                      "axes are invalid for in/out views");
-  ifft(exec_space, in, out, norm, axis, n);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::backward,
+                       axis, n);
+  plan.execute_impl(in, out, norm);
 }
 
 /// \brief One dimensional FFT of a signal that has Hermitian symmetry
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -221,6 +245,10 @@ void hfft(const ExecutionSpace& exec_space, const InViewType& in,
 
 /// \brief Inverse of hfft
 ///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (real)
 /// \param out [out] Output data (complex)
@@ -265,6 +293,10 @@ void ihfft(const ExecutionSpace& exec_space, const InViewType& in,
 
 /// \brief Two dimensional FFT in forward direction
 ///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
 /// \param out [out] Output data (complex)
@@ -295,6 +327,10 @@ void fft2(const ExecutionSpace& exec_space, const InViewType& in,
 }
 
 /// \brief Two dimensional FFT in backward direction
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -327,6 +363,10 @@ void ifft2(const ExecutionSpace& exec_space, const InViewType& in,
 }
 
 /// \brief Two dimensional FFT for real input
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (real)
@@ -361,10 +401,16 @@ void rfft2(const ExecutionSpace& exec_space, const InViewType& in,
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::rfft2");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axes),
                      "axes are invalid for in/out views");
-  fft2(exec_space, in, out, norm, axes, s);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::forward, axes,
+                       s);
+  plan.execute_impl(in, out, norm);
 }
 
 /// \brief Inverse of rfft2
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -399,12 +445,19 @@ void irfft2(const ExecutionSpace& exec_space, const InViewType& in,
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::irfft2");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axes),
                      "axes are invalid for in/out views");
-  ifft2(exec_space, in, out, norm, axes, s);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::backward,
+                       axes, s);
+  plan.execute_impl(in, out, norm);
 }
 
 // ND FFT
 
 /// \brief N-dimensional FFT in forward direction
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+/// \tparam DIM: The dimensionality of the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -448,6 +501,11 @@ void fftn(
 }
 
 /// \brief Inverse of fftn
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+/// \tparam DIM: The dimensionality of the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -493,6 +551,11 @@ void ifftn(
 }
 
 /// \brief N-dimensional FFT for real input
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+/// \tparam DIM: The dimensionality of the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (real)
@@ -540,10 +603,17 @@ void rfftn(
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::rfftn");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axes),
                      "axes are invalid for in/out views");
-  fftn(exec_space, in, out, axes, norm, s);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::forward, axes,
+                       s);
+  plan.execute_impl(in, out, norm);
 }
 
 /// \brief Inverse of rfftn
+///
+/// \tparam ExecutionSpace: The type of Kokkos execution space
+/// \tparam InViewType: Input View type for the fft
+/// \tparam OutViewType: Output View type for the fft
+/// \tparam DIM: The dimensionality of the fft
 ///
 /// \param exec_space [in] Kokkos execution space
 /// \param in [in] Input data (complex)
@@ -591,9 +661,10 @@ void irfftn(
   Kokkos::Profiling::ScopedRegion region("KokkosFFT::irfftn");
   KOKKOSFFT_THROW_IF(!KokkosFFT::Impl::are_valid_axes(in, axes),
                      "axes are invalid for in/out views");
-  ifftn(exec_space, in, out, axes, norm, s);
+  KokkosFFT::Plan plan(exec_space, in, out, KokkosFFT::Direction::backward,
+                       axes, s);
+  plan.execute_impl(in, out, norm);
 }
-
 }  // namespace KokkosFFT
 
 #endif

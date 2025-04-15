@@ -4,7 +4,13 @@
 
 #include <gtest/gtest.h>
 #include "KokkosFFT_Plans.hpp"
-#include "Test_Types.hpp"
+
+namespace {
+#if defined(KOKKOSFFT_HAS_DEVICE_TPL)
+using execution_space = Kokkos::DefaultExecutionSpace;
+#else
+using execution_space = Kokkos::DefaultHostExecutionSpace;
+#endif
 
 template <std::size_t DIM>
 using axes_type = std::array<int, DIM>;
@@ -51,29 +57,37 @@ struct Plans3D : public ::testing::Test {
   using layout_type = typename T::second_type;
 };
 
-TYPED_TEST_SUITE(ExecutionSpaceType, execution_spaces);
-TYPED_TEST_SUITE(Plans1D, test_types);
-TYPED_TEST_SUITE(Plans2D, test_types);
-TYPED_TEST_SUITE(Plans3D, test_types);
-
 // Tests for execution space
 template <typename ExecutionSpace>
 void test_allowed_exec_space() {
-#if !defined(ENABLE_HOST_AND_DEVICE) &&                           \
-    (defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP) || \
-     defined(KOKKOS_ENABLE_SYCL))
-  // For GPUs without ENABLE_HOST_AND_DEVICE, a plan can be constructible from
-  // Kokkos::DefaultExecutionSpace only
+#if defined(KOKKOSFFT_HAS_DEVICE_TPL)
+#if defined(KOKKOSFFT_ENABLE_TPL_FFTW)
+  // A plan can be constructible from Kokkos::DefaultExecutionSpace,
+  // Kokkos::DefaultHostExecutionSpace or Kokkos::Serial (if enabled)
+  static_assert(KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
+#else
+  // Only device backend library is available
   if constexpr (std::is_same_v<ExecutionSpace, Kokkos::DefaultExecutionSpace>) {
     static_assert(KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
   } else {
     static_assert(!KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
   }
+#endif
 #else
-  // For CPUs or GPUs with ENABLE_HOST_AND_DEVICE,
-  // a plan can be constructible from Kokkos::DefaultExecutionSpace,
-  // Kokkos::DefaultHostExecutionSpace or Kokkos::Serial (if enabled)
+  // Only host backend library is available
+  // If device libraries are not enabled, at least FFTW is enabled
+#if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP) || \
+    defined(KOKKOS_ENABLE_SYCL)
+  // A plan can only be constructible from HostSpace
+  if constexpr (std::is_same_v<ExecutionSpace, Kokkos::DefaultExecutionSpace>) {
+    static_assert(!KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
+  } else {
+    static_assert(KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
+  }
+#else
+  // A plan can be constructible from HostSpace
   static_assert(KokkosFFT::Impl::is_AllowedSpace_v<ExecutionSpace>);
+#endif
 #endif
 }
 
@@ -87,36 +101,40 @@ void test_plan_constructible() {
   using PlanType =
       KokkosFFT::Plan<ExecutionSpace, RealView1DType, ComplexView1DType>;
 
-#if !defined(ENABLE_HOST_AND_DEVICE) &&                           \
-    (defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP) || \
-     defined(KOKKOS_ENABLE_SYCL))
-  // For GPUs without ENABLE_HOST_AND_DEVICE, a plan can be constructible from
-  // Kokkos::DefaultExecutionSpace only
+#if defined(KOKKOSFFT_HAS_DEVICE_TPL)
+#if defined(KOKKOSFFT_ENABLE_TPL_FFTW)
+  // A plan can be constructible from Kokkos::DefaultExecutionSpace,
+  // Kokkos::DefaultHostExecutionSpace or Kokkos::Serial (if enabled)
+  static_assert(
+      std::is_constructible_v<PlanType, const ExecutionSpace&, RealView1DType&,
+                              ComplexView1DType&, KokkosFFT::Direction, int>);
+#else
+  // Only device backend library is available
   if constexpr (std::is_same_v<ExecutionSpace, Kokkos::DefaultExecutionSpace>) {
     static_assert(std::is_constructible_v<PlanType, const ExecutionSpace&,
                                           RealView1DType&, ComplexView1DType&,
                                           KokkosFFT::Direction, int>);
   }
+#endif
 #else
-  // For CPUs or GPUs with ENABLE_HOST_AND_DEVICE,
-  // a plan can be constructible from Kokkos::DefaultExecutionSpace,
-  // Kokkos::DefaultHostExecutionSpace or Kokkos::Serial (if enabled)
+  // Only host backend library is available
+  // If device libraries are not enabled, at least FFTW is enabled
+#if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP) || \
+    defined(KOKKOS_ENABLE_SYCL)
+  // A plan can only be constructible from HostSpace
+  if constexpr (!std::is_same_v<ExecutionSpace,
+                                Kokkos::DefaultExecutionSpace>) {
+    static_assert(std::is_constructible_v<PlanType, const ExecutionSpace&,
+                                          RealView1DType&, ComplexView1DType&,
+                                          KokkosFFT::Direction, int>);
+  }
+#else
+  // A plan can be constructible from HostSpace
   static_assert(
       std::is_constructible_v<PlanType, const ExecutionSpace&, RealView1DType&,
                               ComplexView1DType&, KokkosFFT::Direction, int>);
 #endif
-}
-
-// Tests for plan constructiblility
-TYPED_TEST(ExecutionSpaceType, is_allowed_space) {
-  using execution_space_type = typename TestFixture::execution_space_type;
-  test_allowed_exec_space<execution_space_type>();
-}
-
-// Tests for 1D FFT plan on 1D View
-TYPED_TEST(ExecutionSpaceType, is_constrcutrible) {
-  using execution_space_type = typename TestFixture::execution_space_type;
-  test_plan_constructible<execution_space_type>();
+#endif
 }
 
 // Tests for 1D FFT Plans
@@ -383,30 +401,6 @@ void test_plan_1dfft_3dview() {
       std::runtime_error);
 }
 
-// Tests for 1D FFT plan on 1D View
-TYPED_TEST(Plans1D, 1DFFT_1DView) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  test_plan_1dfft_1dview<float_type, layout_type>();
-}
-
-// Tests for 1D batched FFT plan on 2D View
-TYPED_TEST(Plans1D, 1DFFT_batched_2DView) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  test_plan_1dfft_2dview<float_type, layout_type>();
-}
-
-// Tests for 1D batched FFT plan on 3D View
-TYPED_TEST(Plans1D, 1DFFT_batched_3DView) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  test_plan_1dfft_3dview<float_type, layout_type>();
-}
-
 // Tests for 2D FFT Plans
 template <typename T, typename LayoutType>
 void test_plan_2dfft_2dview() {
@@ -640,22 +634,6 @@ void test_plan_2dfft_3dview() {
       std::runtime_error);
 }
 
-// Tests for 2D FFT plan on 2D View
-TYPED_TEST(Plans2D, 2DFFT_2DView) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  test_plan_2dfft_2dview<float_type, layout_type>();
-}
-
-// Tests for 2D batched FFT plan on 3D View
-TYPED_TEST(Plans2D, 2DFFT_3DView) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  test_plan_2dfft_3dview<float_type, layout_type>();
-}
-
 // Tests for 3D FFT Plans
 template <typename T, typename LayoutType>
 void test_plan_3dfft_3dview() {
@@ -818,6 +796,65 @@ void test_plan_3dfft_3dview() {
             /*axes=*/axes_type<3>({2, 1, 0}));
       },
       std::runtime_error);
+}
+
+}  // namespace
+
+TYPED_TEST_SUITE(ExecutionSpaceType, execution_spaces);
+TYPED_TEST_SUITE(Plans1D, test_types);
+TYPED_TEST_SUITE(Plans2D, test_types);
+TYPED_TEST_SUITE(Plans3D, test_types);
+
+// Tests for plan constructiblility
+TYPED_TEST(ExecutionSpaceType, is_allowed_space) {
+  using execution_space_type = typename TestFixture::execution_space_type;
+  test_allowed_exec_space<execution_space_type>();
+}
+
+// Tests for 1D FFT plan on 1D View
+TYPED_TEST(ExecutionSpaceType, is_constrcutrible) {
+  using execution_space_type = typename TestFixture::execution_space_type;
+  test_plan_constructible<execution_space_type>();
+}
+
+// Tests for 1D FFT plan on 1D View
+TYPED_TEST(Plans1D, 1DFFT_1DView) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  test_plan_1dfft_1dview<float_type, layout_type>();
+}
+
+// Tests for 1D batched FFT plan on 2D View
+TYPED_TEST(Plans1D, 1DFFT_batched_2DView) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  test_plan_1dfft_2dview<float_type, layout_type>();
+}
+
+// Tests for 1D batched FFT plan on 3D View
+TYPED_TEST(Plans1D, 1DFFT_batched_3DView) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  test_plan_1dfft_3dview<float_type, layout_type>();
+}
+
+// Tests for 2D FFT plan on 2D View
+TYPED_TEST(Plans2D, 2DFFT_2DView) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  test_plan_2dfft_2dview<float_type, layout_type>();
+}
+
+// Tests for 2D batched FFT plan on 3D View
+TYPED_TEST(Plans2D, 2DFFT_3DView) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  test_plan_2dfft_3dview<float_type, layout_type>();
 }
 
 // Tests for 3D FFT plan on 3D View

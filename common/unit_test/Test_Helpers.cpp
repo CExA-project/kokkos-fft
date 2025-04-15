@@ -6,8 +6,10 @@
 #include <vector>
 #include <Kokkos_Random.hpp>
 #include "KokkosFFT_Helpers.hpp"
-#include "Test_Types.hpp"
 #include "Test_Utils.hpp"
+
+namespace {
+using execution_space = Kokkos::DefaultExecutionSpace;
 
 template <std::size_t DIM>
 using axes_type = std::array<int, DIM>;
@@ -24,7 +26,7 @@ struct FFTHelper : public ::testing::Test {
   using layout_type = typename T::second_type;
 };
 
-TYPED_TEST_SUITE(FFTHelper, test_types);
+class FFTShiftParamTests : public ::testing::TestWithParam<int> {};
 
 // Tests for FFT Freq
 template <typename T, typename LayoutType>
@@ -54,21 +56,21 @@ void test_fft_freq(T atol = 1.0e-12) {
   auto x_odd = KokkosFFT::fftfreq<execution_space, T>(execution_space(), n_odd);
   auto x_odd_pi =
       KokkosFFT::fftfreq<execution_space, T>(execution_space(), n_odd, pi);
-  multiply(x_odd, static_cast<T>(n_odd));
-  multiply(x_odd_pi, static_cast<T>(n_odd) * pi);
+  multiply(execution_space(), x_odd, static_cast<T>(n_odd));
+  multiply(execution_space(), x_odd_pi, static_cast<T>(n_odd) * pi);
 
-  EXPECT_TRUE(allclose(x_odd, x_odd_ref, 1.e-5, atol));
-  EXPECT_TRUE(allclose(x_odd_pi, x_odd_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_odd, x_odd_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_odd_pi, x_odd_ref, 1.e-5, atol));
 
   auto x_even =
       KokkosFFT::fftfreq<execution_space, T>(execution_space(), n_even);
   auto x_even_pi =
       KokkosFFT::fftfreq<execution_space, T>(execution_space(), n_even, pi);
-  multiply(x_even, static_cast<T>(n_even));
-  multiply(x_even_pi, static_cast<T>(n_even) * pi);
+  multiply(execution_space(), x_even, static_cast<T>(n_even));
+  multiply(execution_space(), x_even_pi, static_cast<T>(n_even) * pi);
 
-  EXPECT_TRUE(allclose(x_even, x_even_ref, 1.e-5, atol));
-  EXPECT_TRUE(allclose(x_even_pi, x_even_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_even, x_even_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_even_pi, x_even_ref, 1.e-5, atol));
 }
 
 // Tests for RFFT Freq
@@ -100,96 +102,77 @@ void test_rfft_freq(T atol = 1.0e-12) {
       KokkosFFT::rfftfreq<execution_space, T>(execution_space(), n_odd);
   auto x_odd_pi =
       KokkosFFT::rfftfreq<execution_space, T>(execution_space(), n_odd, pi);
-  multiply(x_odd, static_cast<T>(n_odd));
-  multiply(x_odd_pi, static_cast<T>(n_odd) * pi);
+  multiply(execution_space(), x_odd, static_cast<T>(n_odd));
+  multiply(execution_space(), x_odd_pi, static_cast<T>(n_odd) * pi);
 
-  EXPECT_TRUE(allclose(x_odd, x_odd_ref, 1.e-5, atol));
-  EXPECT_TRUE(allclose(x_odd_pi, x_odd_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_odd, x_odd_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_odd_pi, x_odd_ref, 1.e-5, atol));
 
   auto x_even =
       KokkosFFT::rfftfreq<execution_space, T>(execution_space(), n_even);
   auto x_even_pi =
       KokkosFFT::rfftfreq<execution_space, T>(execution_space(), n_even, pi);
-  multiply(x_even, static_cast<T>(n_even));
-  multiply(x_even_pi, static_cast<T>(n_even) * pi);
+  multiply(execution_space(), x_even, static_cast<T>(n_even));
+  multiply(execution_space(), x_even_pi, static_cast<T>(n_even) * pi);
 
-  EXPECT_TRUE(allclose(x_even, x_even_ref, 1.e-5, atol));
-  EXPECT_TRUE(allclose(x_even_pi, x_even_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_even, x_even_ref, 1.e-5, atol));
+  EXPECT_TRUE(allclose(execution_space(), x_even_pi, x_even_ref, 1.e-5, atol));
 }
 
-// Tests for fftfreq
-TYPED_TEST(FFTHelper, fftfreq) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  float_type atol = std::is_same_v<float_type, float> ? 1.0e-6 : 1.0e-12;
-  test_fft_freq<float_type, layout_type>(atol);
-}
-
-// Tests for rfftfreq
-TYPED_TEST(FFTHelper, rfftfreq) {
-  using float_type  = typename TestFixture::float_type;
-  using layout_type = typename TestFixture::layout_type;
-
-  float_type atol = std::is_same_v<float_type, float> ? 1.0e-6 : 1.0e-12;
-  test_rfft_freq<float_type, layout_type>(atol);
-}
-
-// Tests for get shift
-void test_get_shift(int direction) {
-  constexpr int n_odd = 9, n_even = 10, n2 = 8;
+// Tests for get shifts
+void test_get_shift1D_1DView(int n0, int direction) {
   using RealView1DType = Kokkos::View<double*, execution_space>;
+  RealView1DType x("x", n0);
+
+  Kokkos::Array<std::size_t, 1> shifts1_ref = {};
+  int shift0                                = direction * n0 / 2;
+  if (shift0 < 0) shift0 += n0;
+  shifts1_ref[0] = static_cast<std::size_t>(shift0);
+  auto shifts1 =
+      KokkosFFT::Impl::get_shifts(x, KokkosFFT::axis_type<1>({0}), direction);
+  EXPECT_TRUE(shifts1 == shifts1_ref);
+}
+
+void test_get_shift1D_2DView(int n0, int direction) {
   using RealView2DType = Kokkos::View<double**, execution_space>;
-  RealView1DType x1_odd("x1_odd", n_odd), x1_even("x1_even", n_even);
-  RealView2DType x2_odd("x2_odd", n_odd, n2), x2_even("x2_even", n_even, n2);
+  const int n1         = 5;
+  RealView2DType x("x", n0, n1);
 
-  KokkosFFT::axis_type<1> shift1_odd_ref        = {direction * n_odd / 2};
-  KokkosFFT::axis_type<1> shift1_even_ref       = {direction * n_even / 2};
-  KokkosFFT::axis_type<2> shift1_axis0_odd_ref  = {direction * n_odd / 2, 0};
-  KokkosFFT::axis_type<2> shift1_axis0_even_ref = {direction * n_even / 2, 0};
-  KokkosFFT::axis_type<2> shift1_axis1_odd_ref  = {0, direction * n2 / 2};
-  KokkosFFT::axis_type<2> shift1_axis1_even_ref = {0, direction * n2 / 2};
-  KokkosFFT::axis_type<2> shift2_odd_ref        = {direction * n_odd / 2,
-                                                   direction * n2 / 2};
-  KokkosFFT::axis_type<2> shift2_even_ref       = {direction * n_even / 2,
-                                                   direction * n2 / 2};
+  Kokkos::Array<std::size_t, 2> shifts1_axis0_ref = {}, shifts1_axis1_ref = {};
+  int shift0 = direction * n0 / 2;
+  if (shift0 < 0) shift0 += n0;
+  shifts1_axis0_ref[0] = static_cast<std::size_t>(shift0);
 
-  auto shift1_odd = KokkosFFT::Impl::get_shift(
-      x1_odd, KokkosFFT::axis_type<1>({0}), direction);
-  auto shift1_even = KokkosFFT::Impl::get_shift(
-      x1_even, KokkosFFT::axis_type<1>({0}), direction);
-  auto shift1_axis0_odd = KokkosFFT::Impl::get_shift(
-      x2_odd, KokkosFFT::axis_type<1>({0}), direction);
-  auto shift1_axis0_even = KokkosFFT::Impl::get_shift(
-      x2_even, KokkosFFT::axis_type<1>({0}), direction);
-  auto shift1_axis1_odd = KokkosFFT::Impl::get_shift(
-      x2_odd, KokkosFFT::axis_type<1>({1}), direction);
-  auto shift1_axis1_even = KokkosFFT::Impl::get_shift(
-      x2_even, KokkosFFT::axis_type<1>({1}), direction);
-  auto shift2_odd = KokkosFFT::Impl::get_shift(
-      x2_odd, KokkosFFT::axis_type<2>({0, 1}), direction);
-  auto shift2_even = KokkosFFT::Impl::get_shift(
-      x2_even, KokkosFFT::axis_type<2>({0, 1}), direction);
+  int shift1 = direction * n1 / 2;
+  if (shift1 < 0) shift1 += n1;
+  shifts1_axis1_ref[1] = static_cast<std::size_t>(shift1);
 
-  EXPECT_TRUE(shift1_odd == shift1_odd_ref);
-  EXPECT_TRUE(shift1_even == shift1_even_ref);
-  EXPECT_TRUE(shift1_axis0_odd == shift1_axis0_odd_ref);
-  EXPECT_TRUE(shift1_axis0_even == shift1_axis0_even_ref);
-  EXPECT_TRUE(shift1_axis1_odd == shift1_axis1_odd_ref);
-  EXPECT_TRUE(shift1_axis1_even == shift1_axis1_even_ref);
-  EXPECT_TRUE(shift2_odd == shift2_odd_ref);
-  EXPECT_TRUE(shift2_even == shift2_even_ref);
+  auto shifts1_axis0 =
+      KokkosFFT::Impl::get_shifts(x, KokkosFFT::axis_type<1>({0}), direction);
+  auto shifts1_axis1 =
+      KokkosFFT::Impl::get_shifts(x, KokkosFFT::axis_type<1>({1}), direction);
+  EXPECT_TRUE(shifts1_axis0 == shifts1_axis0_ref);
+  EXPECT_TRUE(shifts1_axis1 == shifts1_axis1_ref);
 }
 
-class GetShiftParamTests : public ::testing::TestWithParam<int> {};
+void test_get_shift2D_2DView(int n0, int direction) {
+  using RealView2DType = Kokkos::View<double**, execution_space>;
+  const int n1         = 5;
+  RealView2DType x("x", n0, n1);
 
-TEST_P(GetShiftParamTests, ForwardAndInverse) {
-  int direction = GetParam();
-  test_get_shift(direction);
+  Kokkos::Array<std::size_t, 2> shifts2_ref = {};
+  int shift0                                = direction * n0 / 2;
+  if (shift0 < 0) shift0 += n0;
+  shifts2_ref[0] = static_cast<std::size_t>(shift0);
+
+  int shift1 = direction * n1 / 2;
+  if (shift1 < 0) shift1 += n1;
+  shifts2_ref[1] = static_cast<std::size_t>(shift1);
+
+  auto shifts2 = KokkosFFT::Impl::get_shifts(x, KokkosFFT::axis_type<2>({0, 1}),
+                                             direction);
+  EXPECT_TRUE(shifts2 == shifts2_ref);
 }
-
-INSTANTIATE_TEST_SUITE_P(GetShift, GetShiftParamTests,
-                         ::testing::Values(1, -1));
 
 // Identity Tests for fftshift1D on 1D View
 void test_fftshift1D_1DView_identity(int n0) {
@@ -206,7 +189,7 @@ void test_fftshift1D_1DView_identity(int n0) {
   KokkosFFT::fftshift(execution_space(), x);
   KokkosFFT::ifftshift(execution_space(), x);
 
-  EXPECT_TRUE(allclose(x, x_ref, 1.e-5, 1.e-12));
+  EXPECT_TRUE(allclose(execution_space(), x, x_ref, 1.e-5, 1.e-12));
 }
 
 // Tests for fftshift1D on 1D View
@@ -242,8 +225,8 @@ void test_fftshift1D_1DView(int n0) {
   KokkosFFT::fftshift(execution_space(), x);
   KokkosFFT::ifftshift(execution_space(), y);
 
-  EXPECT_TRUE(allclose(x, y_ref));
-  EXPECT_TRUE(allclose(y, x_ref));
+  EXPECT_TRUE(allclose(execution_space(), x, y_ref));
+  EXPECT_TRUE(allclose(execution_space(), y, x_ref));
 }
 
 // Tests for fftshift1D on 2D View
@@ -303,16 +286,16 @@ void test_fftshift1D_2DView(int n0) {
   KokkosFFT::fftshift(execution_space(), x, axes_type<1>({0}));
   KokkosFFT::ifftshift(execution_space(), y_axis0, axes_type<1>({0}));
 
-  EXPECT_TRUE(allclose(x, y_axis0_ref));
-  EXPECT_TRUE(allclose(y_axis0, x_ref));
+  EXPECT_TRUE(allclose(execution_space(), x, y_axis0_ref));
+  EXPECT_TRUE(allclose(execution_space(), y_axis0, x_ref));
 
   Kokkos::deep_copy(x, h_x_ref);
 
   KokkosFFT::fftshift(execution_space(), x, axes_type<1>({1}));
   KokkosFFT::ifftshift(execution_space(), y_axis1, axes_type<1>({1}));
 
-  EXPECT_TRUE(allclose(x, y_axis1_ref));
-  EXPECT_TRUE(allclose(y_axis1, x_ref));
+  EXPECT_TRUE(allclose(execution_space(), x, y_axis1_ref));
+  EXPECT_TRUE(allclose(execution_space(), y_axis1, x_ref));
 }
 
 // Tests for fftshift2D on 2D View
@@ -359,11 +342,61 @@ void test_fftshift2D_2DView(int n0) {
   KokkosFFT::fftshift(execution_space(), x, axes_type<2>({0, 1}));
   KokkosFFT::ifftshift(execution_space(), y, axes_type<2>({0, 1}));
 
-  EXPECT_TRUE(allclose(x, y_ref));
-  EXPECT_TRUE(allclose(y, x_ref));
+  EXPECT_TRUE(allclose(execution_space(), x, y_ref));
+  EXPECT_TRUE(allclose(execution_space(), y, x_ref));
+}
+}  // namespace
+
+TYPED_TEST_SUITE(FFTHelper, test_types);
+
+// Tests for fftfreq
+TYPED_TEST(FFTHelper, fftfreq) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  float_type atol = std::is_same_v<float_type, float> ? 1.0e-6 : 1.0e-12;
+  test_fft_freq<float_type, layout_type>(atol);
 }
 
-class FFTShiftParamTests : public ::testing::TestWithParam<int> {};
+// Tests for rfftfreq
+TYPED_TEST(FFTHelper, rfftfreq) {
+  using float_type  = typename TestFixture::float_type;
+  using layout_type = typename TestFixture::layout_type;
+
+  float_type atol = std::is_same_v<float_type, float> ? 1.0e-6 : 1.0e-12;
+  test_rfft_freq<float_type, layout_type>(atol);
+}
+
+// Tests for get shift
+TEST_P(FFTShiftParamTests, GetForwardShift1D1DView) {
+  int n0 = GetParam();
+  test_get_shift1D_1DView(n0, /* direction= */ 1);
+}
+
+TEST_P(FFTShiftParamTests, GetBackwardShift1D1DView) {
+  int n0 = GetParam();
+  test_get_shift1D_1DView(n0, /* direction= */ -1);
+}
+
+TEST_P(FFTShiftParamTests, GetForwardShift1D2DView) {
+  int n0 = GetParam();
+  test_get_shift1D_2DView(n0, /* direction= */ 1);
+}
+
+TEST_P(FFTShiftParamTests, GetBackwardShift1D2DView) {
+  int n0 = GetParam();
+  test_get_shift1D_2DView(n0, /* direction= */ -1);
+}
+
+TEST_P(FFTShiftParamTests, GetForwardShift2D2DView) {
+  int n0 = GetParam();
+  test_get_shift2D_2DView(n0, /* direction= */ 1);
+}
+
+TEST_P(FFTShiftParamTests, GetBackwardShift2D2DView) {
+  int n0 = GetParam();
+  test_get_shift2D_2DView(n0, /* direction= */ -1);
+}
 
 // Identity Tests for fftshift1D on 1D View
 TEST_P(FFTShiftParamTests, Identity) {

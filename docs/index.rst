@@ -9,7 +9,7 @@ kokkos-fft implements local interfaces between `Kokkos <https://kokkos.org>`_
 and de facto standard FFT libraries, 
 including `fftw <http://www.fftw.org>`_,
 `cufft <https://developer.nvidia.com/cufft>`_,
-`hipfft <https://github.com/ROCm/hipFFT>`_ (`rocfft <https://github.com/ROCm/rocFFT>`_), and `oneMKL <https://spec.oneapi.io/versions/latest/elements/oneMKL/source/index.html>`_. 
+`hipfft <https://github.com/ROCm/hipFFT>`_ (`rocfft <https://github.com/ROCm/rocFFT>`_), and `oneMKL <https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html>`_. 
 "Local" means not using MPI, or running within a single MPI process without knowing about MPI.
 We are inclined to implement the `numpy.fft <https://numpy.org/doc/stable/reference/routines.fft.html>`_-like interfaces adapted for Kokkos.
 A key concept is that *"As easy as numpy, as fast as vendor libraries"*. Accordingly, our API follows the API by ``numpy.fft`` with minor differences. 
@@ -27,7 +27,7 @@ Here is an example for 1D real to complex transform with ``rfft`` in kokkos-fft.
    #include <KokkosFFT.hpp>
    using execution_space = Kokkos::DefaultExecutionSpace;
    template <typename T> using View1D = Kokkos::View<T*, execution_space>;
-   constexpr int n = 4;
+   const int n = 4;
 
    View1D<double> x("x", n);
    View1D<Kokkos::complex<double> > x_hat("x_hat", n/2+1);
@@ -52,12 +52,13 @@ This is equivalent to the following python script.
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    getting_started
    finding_libraries
    api_reference
    examples
+   developer_guide
 
 ..
     Indices and tables
